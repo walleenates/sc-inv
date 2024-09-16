@@ -1,0 +1,111 @@
+/* src/pages/ManageItem.css */
+.manage-item-container {
+  font-family: Arial, sans-serif;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 24px;
+  color: #333;
+}
+
+.add-item,
+.edit-item {
+  margin-bottom: 20px;
+}
+
+.add-item label,
+.edit-item label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px; /* Space between label and input */
+}
+
+.add-item input,
+.add-item select,
+.add-item button,
+.edit-item input,
+.edit-item select,
+.edit-item button {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.add-item button,
+.edit-item button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.add-item button:hover,
+.edit-item button:hover {
+  background-color: #0056b3;
+}
+
+.item-list {
+  list-style-type: none;
+  padding: 0;
+}
+
+.item {
+  border: 1px solid #ddd;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.item img {
+  max-width: 100px;
+  height: auto;
+  display: block;
+}
+
+.item-details {
+  flex: 1;
+}
+
+.edit-item-button,
+.delete-item-button {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.edit-item-button {
+  background-color: #28a745;
+  color: white;
+}
+
+.edit-item-button:hover {
+  background-color: #218838;
+}
+
+.delete-item-button {
+  background-color: #dc3545;
+  color: white;
+}
+
+.delete-item-button:hover {
+  background-color: #c82333;
+}
+
+.error-message {
+  color: red;
+  font-weight: bold;
+}
+
+.college-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+}
