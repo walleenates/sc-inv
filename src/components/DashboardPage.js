@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { auth } from '../firebase/firebase-config'; // Adjust the import path as needed
+import { auth } from '../firebase/firebase-config';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { db } from '../firebase/firebase-config'; // Adjust the import path as needed
-import './Dashboard.css'; // Ensure you have relevant styles in this file
+import { db } from '../firebase/firebase-config';
+import './Dashboard.css';
 
 const DashboardPage = () => {
   const [totalItems, setTotalItems] = useState(0);
@@ -13,8 +13,9 @@ const DashboardPage = () => {
   const [selectedCollege, setSelectedCollege] = useState(null);
   const [approvedRequestsCount, setApprovedRequestsCount] = useState({});
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const navigate = useNavigate(); // Hook to programmatically navigate
-  const userName = "Admin"; // Replace with dynamic user data if available
+  const [lowStockItems, setLowStockItems] = useState([]);
+  const navigate = useNavigate();
+  const userName = "Admin";
 
   useEffect(() => {
     const itemsCollection = collection(db, 'items');
@@ -22,7 +23,6 @@ const DashboardPage = () => {
       const items = snapshot.docs.map(doc => doc.data());
       setTotalItems(items.length);
 
-      // Group items by college and count them
       const collegeMap = items.reduce((acc, item) => {
         if (item.college) {
           acc[item.college] = (acc[item.college] || 0) + 1;
@@ -31,6 +31,10 @@ const DashboardPage = () => {
       }, {});
 
       setCollegeItemCounts(collegeMap);
+
+      // Find low stock items
+      const lowStock = items.filter(item => item.quantity <= 10); // Using a hardcoded limit for now
+      setLowStockItems(lowStock);
     });
 
     const requestsCollection = collection(db, 'requests');
@@ -68,13 +72,16 @@ const DashboardPage = () => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigate('/sign-in'); // Redirect to sign-in page after logout
+      navigate('/sign-in');
     } catch (error) {
       console.error('Error logging out: ', error);
     }
   };
 
-  // Filter colleges based on search term
+  const handleLowStockClick = (itemId) => {
+    navigate('/manage-item');
+  };
+
   const filteredColleges = Object.keys(collegeItemCounts).filter(college =>
     college.toLowerCase().includes(searchTerm)
   );
@@ -104,6 +111,24 @@ const DashboardPage = () => {
               </div>
             )}
           </div>
+          <div className="notification-bell" onClick={toggleDropdown}>
+            🛎️
+            {lowStockItems.length > 0 && <span className="notification-count">{lowStockItems.length}</span>}
+          </div>
+          {dropdownOpen && (
+            <div className="dropdown-menu">
+              <h3>Low Stock Items</h3>
+              {lowStockItems.length > 0 ? (
+                lowStockItems.map(item => (
+                  <div key={item.id} className="low-stock-item" onClick={() => handleLowStockClick(item.id)}>
+                    <p>{item.text} - Quantity: {item.quantity}</p>
+                  </div>
+                ))
+              ) : (
+                <p>No low stock items</p>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -111,7 +136,7 @@ const DashboardPage = () => {
         <section className="cards">
           <div className="card item-card">
             <h3>ITEMS</h3>
-            <p>Total Items: {totalItems}</p> {/* Display total number of items */}
+            <p>Total Items: {totalItems}</p>
           </div>
           <div className="card folder-card">
             <h3>FOLDER</h3>

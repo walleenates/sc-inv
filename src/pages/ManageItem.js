@@ -1,6 +1,5 @@
-// src/pages/ManageItem.js
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase/firebase-config';
+import { db, storage } from '../firebase/firebase-config'; 
 import {
   collection,
   addDoc,
@@ -10,14 +9,14 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { Timestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; 
 import JsBarcode from 'jsbarcode';
-import Camera from './Camera'; // Import the Camera component
+import Camera from '../components/Camera'; 
 import './ManageItem.css';
 
 const colleges = ["CCS", "COC", "CED", "CBA", "BED", "COE"];
 const itemTypes = ["Equipment", "Office Supplies", "Books", "Electrical Parts"];
 
-// Barcode Component
 const Barcode = ({ value }) => {
   const svgRef = useRef(null);
 
@@ -53,9 +52,10 @@ const ManageItem = () => {
   const [editRequestedDate, setEditRequestedDate] = useState("");
   const [editSupplier, setEditSupplier] = useState("");
   const [editItemType, setEditItemType] = useState("Equipment");
-  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null); 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [visibleColleges, setVisibleColleges] = useState({});
+  const [saveOption, setSaveOption] = useState('local'); 
 
   useEffect(() => {
     const itemsCollection = collection(db, "items");
@@ -95,18 +95,18 @@ const ManageItem = () => {
           supplier,
           itemType,
           barcode: newBarcode,
-          image,
+          image: imagePreview, 
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         });
         setNewItem("");
         setSelectedCollege("");
         setQuantity(1);
-        setAmount(0);
+        setAmount("");
         setRequestedDate("");
         setSupplier("");
         setItemType("Equipment");
-        setImage(null);
+        setImagePreview(null); 
       } catch (error) {
         console.error("Error adding document: ", error);
       }
@@ -122,7 +122,7 @@ const ManageItem = () => {
     setEditRequestedDate(item.requestedDate.toDate().toISOString().substr(0, 10));
     setEditSupplier(item.supplier);
     setEditItemType(item.itemType);
-    setImage(item.image);
+    setImagePreview(item.image);
   };
 
   const handleSaveEdit = async () => {
@@ -146,7 +146,7 @@ const ManageItem = () => {
           requestedDate: new Date(editRequestedDate),
           supplier: editSupplier,
           itemType: editItemType,
-          image,
+          image: imagePreview, 
           updatedAt: Timestamp.now(),
         });
         setEditItem(null);
@@ -157,7 +157,7 @@ const ManageItem = () => {
         setEditRequestedDate("");
         setEditSupplier("");
         setEditItemType("Equipment");
-        setImage(null);
+        setImagePreview(null);
       } catch (error) {
         console.error("Error updating document: ", error);
       }
@@ -180,30 +180,64 @@ const ManageItem = () => {
     }));
   };
 
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return "Admin";
-    const date = timestamp.toDate();
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
-  };
-
+  // Group items by college and calculate the total quantity of items per college
   const groupedItems = items.reduce((acc, item) => {
     if (!acc[item.college]) {
-      acc[item.college] = [];
+      acc[item.college] = {
+        items: [],
+        totalQuantity: 0,
+      };
     }
-    acc[item.college].push(item);
+    acc[item.college].items.push(item);
+    acc[item.college].totalQuantity += item.quantity; // Summing the quantity
     return acc;
   }, {});
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      setImage(URL.createObjectURL(file));
+      const storageRef = ref(storage, `images/${file.name}`); 
+      try {
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        setImagePreview(downloadURL); // Set preview URL
+        console.log("Uploaded a file and got URL:", downloadURL);
+      } catch (error) {
+        console.error("Error uploading file: ", error);
+      }
     }
   };
 
-  const handleCameraCapture = (imageUrl) => {
-    setImage(imageUrl);
-    setIsCameraOpen(false); // Close the camera after capturing
+  const handleSaveOptionChange = (e) => {
+    setSaveOption(e.target.value);
+  };
+
+  const handleCameraCapture = async (imageUrl) => {
+    if (saveOption === 'local') {
+      const link = document.createElement('a');
+      link.href = imageUrl;
+      link.download = 'captured-image.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      alert("Image download initiated. The file will be saved to your default downloads folder.");
+    } else if (saveOption === 'system') {
+      const fileName = `captured-image-${Date.now()}.png`;
+      const storageRef = ref(storage, `images/${fileName}`);
+      try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+        setImagePreview(downloadURL); // Set preview URL
+        console.log("Uploaded a file and got URL:", downloadURL);
+      } catch (error) {
+        console.error("Error uploading file: ", error);
+      }
+    } else {
+      alert("Invalid option. Please choose 'local' or 'system'.");
+    }
+    setIsCameraOpen(false);
   };
 
   return (
@@ -232,14 +266,12 @@ const ManageItem = () => {
           value={quantity}
           min="1"
           onChange={(e) => setQuantity(parseInt(e.target.value))}
-          placeholder="Quantity"
         />
         <input
           type="number"
           value={amount}
           min="0"
           onChange={(e) => setAmount(parseFloat(e.target.value))}
-          placeholder="Amount"
         />
         <input
           type="date"
@@ -252,104 +284,122 @@ const ManageItem = () => {
           onChange={(e) => setSupplier(e.target.value)}
           placeholder="Supplier"
         />
-        <select value={itemType} onChange={(e) => setItemType(e.target.value)}>
+        <select
+          value={itemType}
+          onChange={(e) => setItemType(e.target.value)}
+        >
           {itemTypes.map((type) => (
             <option key={type} value={type}>
               {type}
             </option>
           ))}
         </select>
-        <input type="file" accept="image/*" onChange={handleImageUpload} />
-        <button onClick={() => setIsCameraOpen(true)}>Open Camera</button>
+        <input type="file" onChange={handleImageUpload} />
         <button onClick={handleAddItem}>Add Item</button>
       </div>
-      <div>
-        {editItem && (
-          <div className="edit-item">
-            <input
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              placeholder="Edit item"
-            />
-            <select
-              value={editCollege}
-              onChange={(e) => setEditCollege(e.target.value)}
-            >
-              {colleges.map((college) => (
-                <option key={college} value={college}>
-                  {college}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={editQuantity}
-              min="1"
-              onChange={(e) => setEditQuantity(parseInt(e.target.value))}
-              placeholder="Quantity"
-            />
-            <input
-              type="number"
-              value={editAmount}
-              min="0"
-              onChange={(e) => setEditAmount(parseFloat(e.target.value))}
-              placeholder="Amount"
-            />
-            <input
-              type="date"
-              value={editRequestedDate}
-              onChange={(e) => setEditRequestedDate(e.target.value)}
-            />
-            <input
-              type="text"
-              value={editSupplier}
-              onChange={(e) => setEditSupplier(e.target.value)}
-              placeholder="Supplier"
-            />
-            <select
-              value={editItemType}
-              onChange={(e) => setEditItemType(e.target.value)}
-            >
-              {itemTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            <input type="file" accept="image/*" onChange={handleImageUpload} />
-            <button onClick={handleSaveEdit}>Save</button>
-            <button onClick={() => setEditItem(null)}>Cancel</button>
-          </div>
-        )}
-      </div>
-      {Object.keys(groupedItems).map((college) => (
+
+      {/* Display grouped items by college */}
+      {Object.entries(groupedItems).map(([college, { items: collegeItems, totalQuantity }]) => (
         <div key={college}>
           <h2 onClick={() => toggleFolderVisibility(college)}>
-            {college} ({groupedItems[college].length} items)
+            {college} - Total Quantity: {totalQuantity}
           </h2>
-          {visibleColleges[college] &&
-            groupedItems[college].map((item) => (
-              <div key={item.id}>
-                <h3>
-                  {item.text} (Quantity: {item.quantity}, Amount: {item.amount})
-                </h3>
-                <p>
-                  Requested Date: {item.requestedDate ? new Date(item.requestedDate.seconds * 1000).toDateString() : "N/A"}
-                </p>
-                <p>Supplier: {item.supplier}</p>
-                <p>Type: {item.itemType}</p>
-                {item.barcode && <Barcode value={item.barcode} />}
-                {item.image && <img src={item.image} alt="Item" />}
-                <button onClick={() => handleEditItem(item)}>Edit</button>
-                <button onClick={() => handleDeleteItem(item.id)}>Delete</button>
-                <p>Created: {formatTimestamp(item.createdAt)}</p>
-                <p>Updated: {formatTimestamp(item.updatedAt)}</p>
-              </div>
-            ))}
+          {visibleColleges[college] && (
+            <ul>
+              {collegeItems.map((item) => (
+                <li key={item.id}>
+                  {item.text} - Quantity: {item.quantity} - Amount: ${item.amount}
+                  <br />
+                  Supplier: {item.supplier}, Type: {item.itemType}
+                  <br />
+                  Requested Date: {item.requestedDate.toDate().toLocaleDateString()}
+                  <br />
+                  {item.image && <img src={item.image} alt="Item" width="100" />}
+                  <button onClick={() => handleEditItem(item)}>Edit</button>
+                  <button onClick={() => handleDeleteItem(item.id)}>Delete</button>
+                  <Barcode value={item.barcode} />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ))}
-      {isCameraOpen && <Camera onCapture={handleCameraCapture} onClose={() => setIsCameraOpen(false)} />}
+
+      {editItem && (
+        <div className="edit-item">
+          <h2>Edit Item</h2>
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+          />
+          <select
+            value={editCollege}
+            onChange={(e) => setEditCollege(e.target.value)}
+          >
+            <option value="">Select College</option>
+            {colleges.map((college) => (
+              <option key={college} value={college}>
+                {college}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            value={editQuantity}
+            min="1"
+            onChange={(e) => setEditQuantity(parseInt(e.target.value))}
+          />
+          <input
+            type="number"
+            value={editAmount}
+            min="0"
+            onChange={(e) => setEditAmount(parseFloat(e.target.value))}
+          />
+          <input
+            type="date"
+            value={editRequestedDate}
+            onChange={(e) => setEditRequestedDate(e.target.value)}
+          />
+          <input
+            type="text"
+            value={editSupplier}
+            onChange={(e) => setEditSupplier(e.target.value)}
+            placeholder="Supplier"
+          />
+          <select
+            value={editItemType}
+            onChange={(e) => setEditItemType(e.target.value)}
+          >
+            {itemTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+          <input type="file" onChange={handleImageUpload} />
+          <button onClick={handleSaveEdit}>Save Changes</button>
+        </div>
+      )}
+
+      {isCameraOpen && (
+        <Camera onCapture={handleCameraCapture} onClose={() => setIsCameraOpen(false)} />
+      )}
+      <div className="camera-save-option">
+        <label>Save to:</label>
+        <select value={saveOption} onChange={handleSaveOptionChange}>
+          <option value="local">Local</option>
+          <option value="system">System</option>
+        </select>
+        <button onClick={() => setIsCameraOpen(true)}>Open Camera</button>
+      </div>
+
+      {imagePreview && (
+        <div className="image-preview">
+          <h3>Image Preview:</h3>
+          <img src={imagePreview} alt="Preview" width="200" />
+        </div>
+      )}
     </div>
   );
 };
