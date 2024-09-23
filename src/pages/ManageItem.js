@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db, storage } from '../firebase/firebase-config'; 
+import { db, storage } from '../firebase/firebase-config';
 import {
   collection,
   addDoc,
@@ -9,9 +9,10 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; 
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import JsBarcode from 'jsbarcode';
-import Camera from '../components/Camera'; 
+import Camera from '../components/Camera';
+
 import './ManageItem.css';
 
 const colleges = ["CCS", "COC", "CED", "CBA", "BED", "COE"];
@@ -52,10 +53,10 @@ const ManageItem = () => {
   const [editRequestedDate, setEditRequestedDate] = useState("");
   const [editSupplier, setEditSupplier] = useState("");
   const [editItemType, setEditItemType] = useState("Equipment");
-  const [imagePreview, setImagePreview] = useState(null); 
+  const [imagePreview, setImagePreview] = useState(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [visibleColleges, setVisibleColleges] = useState({});
-  const [saveOption, setSaveOption] = useState('local'); 
+  const [saveOption, setSaveOption] = useState('local');
 
   useEffect(() => {
     const itemsCollection = collection(db, "items");
@@ -75,19 +76,11 @@ const ManageItem = () => {
   };
 
   const handleAddItem = async () => {
-    if (
-      newItem.trim() &&
-      selectedCollege &&
-      quantity > 0 &&
-      amount >= 0 &&
-      requestedDate &&
-      supplier &&
-      itemType
-    ) {
+    if (newItem && selectedCollege && quantity > 0 && amount >= 0 && requestedDate && supplier && itemType) {
       const newBarcode = generateBarcode();
       try {
         await addDoc(collection(db, "items"), {
-          text: newItem.trim(),
+          text: newItem,
           college: selectedCollege,
           quantity,
           amount,
@@ -95,18 +88,11 @@ const ManageItem = () => {
           supplier,
           itemType,
           barcode: newBarcode,
-          image: imagePreview, 
+          image: imagePreview,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         });
-        setNewItem("");
-        setSelectedCollege("");
-        setQuantity(1);
-        setAmount("");
-        setRequestedDate("");
-        setSupplier("");
-        setItemType("Equipment");
-        setImagePreview(null); 
+        clearFields();
       } catch (error) {
         console.error("Error adding document: ", error);
       }
@@ -126,38 +112,21 @@ const ManageItem = () => {
   };
 
   const handleSaveEdit = async () => {
-    if (
-      editItem &&
-      editValue.trim() &&
-      editCollege &&
-      editQuantity > 0 &&
-      editAmount >= 0 &&
-      editRequestedDate &&
-      editSupplier &&
-      editItemType
-    ) {
+    if (editItem && editValue && editCollege && editQuantity > 0 && editAmount >= 0 && editRequestedDate && editSupplier && editItemType) {
       try {
         const itemDoc = doc(db, "items", editItem.id);
         await updateDoc(itemDoc, {
-          text: editValue.trim(),
+          text: editValue,
           college: editCollege,
           quantity: editQuantity,
           amount: editAmount,
           requestedDate: new Date(editRequestedDate),
           supplier: editSupplier,
           itemType: editItemType,
-          image: imagePreview, 
+          image: imagePreview,
           updatedAt: Timestamp.now(),
         });
-        setEditItem(null);
-        setEditValue("");
-        setEditCollege("");
-        setEditQuantity(1);
-        setEditAmount(0);
-        setEditRequestedDate("");
-        setEditSupplier("");
-        setEditItemType("Equipment");
-        setImagePreview(null);
+        clearEditFields();
       } catch (error) {
         console.error("Error updating document: ", error);
       }
@@ -180,31 +149,23 @@ const ManageItem = () => {
     }));
   };
 
-  // Group items by college and calculate the total quantity of items per college
   const groupedItems = items.reduce((acc, item) => {
     if (!acc[item.college]) {
-      acc[item.college] = {
-        items: [],
-        totalQuantity: 0,
-      };
+      acc[item.college] = { items: [], totalQuantity: 0 };
     }
     acc[item.college].items.push(item);
-    acc[item.college].totalQuantity += item.quantity; // Summing the quantity
+    acc[item.college].totalQuantity += item.quantity;
     return acc;
   }, {});
 
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const storageRef = ref(storage, `images/${file.name}`); 
-      try {
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
-        setImagePreview(downloadURL); // Set preview URL
-        console.log("Uploaded a file and got URL:", downloadURL);
-      } catch (error) {
-        console.error("Error uploading file: ", error);
-      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -220,7 +181,7 @@ const ManageItem = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      alert("Image download initiated. The file will be saved to your default downloads folder.");
+      alert("Image downloaded successfully.");
     } else if (saveOption === 'system') {
       const fileName = `captured-image-${Date.now()}.png`;
       const storageRef = ref(storage, `images/${fileName}`);
@@ -229,177 +190,113 @@ const ManageItem = () => {
         const blob = await response.blob();
         await uploadBytes(storageRef, blob);
         const downloadURL = await getDownloadURL(storageRef);
-        setImagePreview(downloadURL); // Set preview URL
-        console.log("Uploaded a file and got URL:", downloadURL);
+        setImagePreview(downloadURL);
       } catch (error) {
         console.error("Error uploading file: ", error);
       }
-    } else {
-      alert("Invalid option. Please choose 'local' or 'system'.");
     }
     setIsCameraOpen(false);
+  };
+
+  const clearFields = () => {
+    setNewItem("");
+    setSelectedCollege("");
+    setQuantity(1);
+    setAmount(0);
+    setRequestedDate("");
+    setSupplier("");
+    setItemType("Equipment");
+    setImagePreview(null);
+  };
+
+  const clearEditFields = () => {
+    setEditItem(null);
+    setEditValue("");
+    setEditCollege("");
+    setEditQuantity(1);
+    setEditAmount(0);
+    setEditRequestedDate("");
+    setEditSupplier("");
+    setEditItemType("Equipment");
+    setImagePreview(null);
   };
 
   return (
     <div className="manage-item-container">
       <h1>Manage Items</h1>
       <div className="add-item">
-        <input
-          type="text"
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          placeholder="Add new item"
-        />
-        <select
-          value={selectedCollege}
-          onChange={(e) => setSelectedCollege(e.target.value)}
-        >
+        <input type="text" value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Add new item" />
+        <select value={selectedCollege} onChange={(e) => setSelectedCollege(e.target.value)}>
           <option value="">Select College</option>
           {colleges.map((college) => (
-            <option key={college} value={college}>
-              {college}
-            </option>
+            <option key={college} value={college}>{college}</option>
           ))}
         </select>
-        <input
-          type="number"
-          value={quantity}
-          min="1"
-          onChange={(e) => setQuantity(parseInt(e.target.value))}
-        />
-        <input
-          type="number"
-          value={amount}
-          min="0"
-          onChange={(e) => setAmount(parseFloat(e.target.value))}
-        />
-        <input
-          type="date"
-          value={requestedDate}
-          onChange={(e) => setRequestedDate(e.target.value)}
-        />
-        <input
-          type="text"
-          value={supplier}
-          onChange={(e) => setSupplier(e.target.value)}
-          placeholder="Supplier"
-        />
-        <select
-          value={itemType}
-          onChange={(e) => setItemType(e.target.value)}
-        >
-          {itemTypes.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
+        <input type="number" value={quantity} min="1" onChange={(e) => setQuantity(parseInt(e.target.value))} />
+        <input type="number" value={amount} min="0" onChange={(e) => setAmount(parseFloat(e.target.value))} />
+        <input type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} />
+        <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Supplier" />
+        <select value={itemType} onChange={(e) => setItemType(e.target.value)}>
+          {itemTypes.map((type) => <option key={type} value={type}>{type}</option>)}
         </select>
         <input type="file" onChange={handleImageUpload} />
+        <div>
+          <label>Save Option:</label>
+          <select value={saveOption} onChange={handleSaveOptionChange}>
+            <option value="local">Save Locally</option>
+            <option value="system">Save to System</option>
+          </select>
+        </div>
         <button onClick={handleAddItem}>Add Item</button>
       </div>
-
-      {/* Display grouped items by college */}
-      {Object.entries(groupedItems).map(([college, { items: collegeItems, totalQuantity }]) => (
+      <h2>Existing Items</h2>
+      {Object.keys(groupedItems).map((college) => (
         <div key={college}>
-          <h2 onClick={() => toggleFolderVisibility(college)}>
-            {college} - Total Quantity: {totalQuantity}
-          </h2>
+          <h3 onClick={() => toggleFolderVisibility(college)}>{college} (Total Quantity: {groupedItems[college].totalQuantity})</h3>
           {visibleColleges[college] && (
-            <ul>
-              {collegeItems.map((item) => (
-                <li key={item.id}>
-                  {item.text} - Quantity: {item.quantity} - Amount: ${item.amount}
-                  <br />
-                  Supplier: {item.supplier}, Type: {item.itemType}
-                  <br />
-                  Requested Date: {item.requestedDate.toDate().toLocaleDateString()}
-                  <br />
-                  {item.image && <img src={item.image} alt="Item" width="100" />}
+            <div>
+              {groupedItems[college].items.map((item) => (
+                <div key={item.id} className="item">
+                  <Barcode value={item.barcode} />
+                  <div>{item.text}</div>
+                  <div>Quantity: {item.quantity}</div>
+                  <div>Amount: ${item.amount}</div>
+                  <div>Requested Date: {item.requestedDate.toDate().toLocaleDateString()}</div>
+                  <div>Supplier: {item.supplier}</div>
+                  <div>Item Type: {item.itemType}</div>
+                  {item.image && <img src={item.image} alt="Uploaded" />}
                   <button onClick={() => handleEditItem(item)}>Edit</button>
                   <button onClick={() => handleDeleteItem(item.id)}>Delete</button>
-                  <Barcode value={item.barcode} />
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       ))}
-
       {editItem && (
         <div className="edit-item">
           <h2>Edit Item</h2>
-          <input
-            type="text"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-          />
-          <select
-            value={editCollege}
-            onChange={(e) => setEditCollege(e.target.value)}
-          >
+          <input type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+          <select value={editCollege} onChange={(e) => setEditCollege(e.target.value)}>
             <option value="">Select College</option>
             {colleges.map((college) => (
-              <option key={college} value={college}>
-                {college}
-              </option>
+              <option key={college} value={college}>{college}</option>
             ))}
           </select>
-          <input
-            type="number"
-            value={editQuantity}
-            min="1"
-            onChange={(e) => setEditQuantity(parseInt(e.target.value))}
-          />
-          <input
-            type="number"
-            value={editAmount}
-            min="0"
-            onChange={(e) => setEditAmount(parseFloat(e.target.value))}
-          />
-          <input
-            type="date"
-            value={editRequestedDate}
-            onChange={(e) => setEditRequestedDate(e.target.value)}
-          />
-          <input
-            type="text"
-            value={editSupplier}
-            onChange={(e) => setEditSupplier(e.target.value)}
-            placeholder="Supplier"
-          />
-          <select
-            value={editItemType}
-            onChange={(e) => setEditItemType(e.target.value)}
-          >
-            {itemTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
+          <input type="number" value={editQuantity} min="1" onChange={(e) => setEditQuantity(parseInt(e.target.value))} />
+          <input type="number" value={editAmount} min="0" onChange={(e) => setEditAmount(parseFloat(e.target.value))} />
+          <input type="date" value={editRequestedDate} onChange={(e) => setEditRequestedDate(e.target.value)} />
+          <input type="text" value={editSupplier} onChange={(e) => setEditSupplier(e.target.value)} />
+          <select value={editItemType} onChange={(e) => setEditItemType(e.target.value)}>
+            {itemTypes.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
           <input type="file" onChange={handleImageUpload} />
-          <button onClick={handleSaveEdit}>Save Changes</button>
+          <button onClick={handleSaveEdit}>Save</button>
+          <button onClick={clearEditFields}>Cancel</button>
         </div>
       )}
-
-      {isCameraOpen && (
-        <Camera onCapture={handleCameraCapture} onClose={() => setIsCameraOpen(false)} />
-      )}
-      <div className="camera-save-option">
-        <label>Save to:</label>
-        <select value={saveOption} onChange={handleSaveOptionChange}>
-          <option value="local">Local</option>
-          <option value="system">System</option>
-        </select>
-        <button onClick={() => setIsCameraOpen(true)}>Open Camera</button>
-      </div>
-
-      {imagePreview && (
-        <div className="image-preview">
-          <h3>Image Preview:</h3>
-          <img src={imagePreview} alt="Preview" width="200" />
-        </div>
-      )}
+      {isCameraOpen && <Camera onCapture={handleCameraCapture} />}
+      <button onClick={() => setIsCameraOpen(true)}>Open Camera</button>
     </div>
   );
 };
